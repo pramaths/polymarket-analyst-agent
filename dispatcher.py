@@ -4,24 +4,16 @@ from reasoning import recommend_markets
 from parser import parse_text_to_market_params
 
 def handle_request(text: str, api_key: str) -> str:
-    """
-    Routes the user's text request to the appropriate tool or reasoning function
-    and formats the response.
-    """
     text = text.lower()
 
-    # --- Intent Routing ---
-    # Tool: Get Market Stats
     if "market stats" in text:
         stats = get_market_stats(api_key)
         return f"Here are the latest market stats:\n{json.dumps(stats, indent=2)}"
     
-    # Tool: Get Category Stats
     if "category stats" in text:
         stats = get_category_stats(api_key)
         return f"Here are the latest category stats:\n{json.dumps(stats, indent=2)}"
 
-    # Reasoning: Find Recommendations (MeTTa)
     if text.startswith("recommendations for"):
         target_slug = text.replace("recommendations for", "").strip()
         all_markets = query_markets(api_key, {"limit": 100})
@@ -32,7 +24,6 @@ def handle_request(text: str, api_key: str) -> str:
             return f"I couldn't find any good recommendations for '{target_slug}'."
         return "I couldn't fetch market data to base my recommendations on."
 
-    # Tool: Query Markets (Default)
     params = parse_text_to_market_params(text)
     markets = query_markets(api_key, params)
     if markets:

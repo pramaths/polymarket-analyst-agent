@@ -16,17 +16,14 @@ from uuid import uuid4
 import re
 import json
 
-# Import from our new modular files
 from tools import query_markets, get_market_stats
 from reasoning import recommend_markets
 from dispatcher import handle_request
 
-# Agent Configuration
 AGENT_NAME = "polymarket_analyst"
 AGENT_SEED = "a_new_polymarket_analyst_agent_secret_seed_phrase"
 ASI_API_KEY = "your_asi_api_key_here"
 
-# Initialize Agent
 agent = Agent(name=AGENT_NAME, seed=AGENT_SEED, port=8001, mailbox=True)
 fund_agent_if_low(agent.wallet.address())
 chat_proto = Protocol(name=chat_protocol_spec.name, version=chat_protocol_spec.version)
@@ -37,22 +34,18 @@ def create_text_chat(text: str) -> ChatMessage:
 
 @agent.on_event("startup")
 async def run_startup_tests(ctx: Context):
-    """Runs a series of data-agnostic tests on startup."""
     ctx.logger.info("--- RUNNING STARTUP INTEGRATION TESTS ---")
     
-    # Test stats tool
     stats = get_market_stats(ASI_API_KEY)
     if stats and stats.get('totalVolume'):
         ctx.logger.info("Success! Market stats tool is working.")
     else:
         ctx.logger.error("Failed: Market stats tool.")
 
-    # Test query tool and get data for reasoning test
     markets = query_markets(ASI_API_KEY, {"limit": 1})
     if markets:
         ctx.logger.info("Success! Market query tool is working.")
         target_slug = markets[0].get("slug")
-        # Test reasoning tool
         all_markets = query_markets(ASI_API_KEY, {"limit": 100})
         if all_markets and target_slug:
             recommendations = recommend_markets(all_markets, target_slug)

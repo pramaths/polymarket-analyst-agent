@@ -1,117 +1,55 @@
-# Polymarket Analyst Agent
+# Polymarket Analyst Agent 🔮
 
-This project is an AI-powered agent built with `uagents` that can answer natural language questions about market data from Polymarket.
+An AI-powered conversational agent that provides intelligent insights from Polymarket prediction markets. This project combines a modular, tool-based agent architecture with a powerful symbolic reasoning engine to go beyond simple data retrieval.
 
-It is supported by a lightweight Python FastAPI backend that queries a MongoDB database. The database is intended to be populated by a separate data ingestion service (e.g., a NestJS application).
+## How It Works: The Architecture
 
-## Architecture
-
-The system is composed of three main parts:
-
-1.  **Data Ingestion Service (External):** A service (e.g., written in NestJS) that is responsible for fetching data from the Polymarket API and storing it in a structured format in a MongoDB database.
-2.  **Python Query Backend (This Repo):** A FastAPI application that connects to the MongoDB database and exposes a powerful, flexible API. It translates HTTP query parameters into MongoDB queries.
-3.  **Python Analyst Agent (This Repo):** A `uagents` agent that provides a conversational interface. It parses natural language, calls the Python Query Backend to get data, and formats the results into a human-readable response.
+This project is built on a clean, decoupled architecture that separates data processing, querying, and agent logic. This design makes the system scalable, maintainable, and highly extensible.
 
 ```
 ┌──────────────────┐     ┌───────────────────┐     ┌────────────────┐
 │ User via         │     │                   │     │ Python Query   │
 │ Agentverse UI    │ ◀───▶ │ Python Analyst    │ ◀───▶ │ Backend        │
 └──────────────────┘     │ Agent (main.py)   │     │ (FastAPI)      │
-                         └───────────────────┘     └───────┬────────┘
-                                                         │
-                                                         ▼
-                                                 ┌────────────────┐
-                                                 │ MongoDB        │
-                                                 │ Database       │
-                                                 └────────────────┘
+                         └───────┬───────────┘     └───────┬────────┘
+                                 │                         │
+            (Calls Tools & Reasoners)                      ▼
+                                 │                 ┌────────────────┐
+                         ┌───────▼───────────┐     │ MongoDB        │
+                         │ Agent "Brain"     │     │ Database       │
+                         │ (dispatcher.py)   │     └────────────────┘
+                         └───────────────────┘
 ```
 
-## Setup Instructions
+1.  **Python Query Backend (`/backend`):** A lightweight FastAPI server whose only job is to connect to the database and expose a powerful API. It translates simple HTTP requests into complex MongoDB queries.
+2.  **Agent Runtimes (`main.py`):** A lean entrypoint for the `uagents` agent. Its only jobs are to handle the connection to the Agentverse and pass messages to the agent's "brain".
+3.  **The Agent's "Brain" (`dispatcher.py`, `parser.py`, `tools.py`):** This is the core of the agent's intelligence.
+    *   **Parser:** Translates natural language into structured commands.
+    *   **Tools:** A collection of functions that perform specific actions, like calling the backend API.
+    *   **Dispatcher:** The central router that understands the user's intent and decides which tool to use.
+4.  **The Reasoning Engine (`reasoning.py`):** This is where the magic happens. This module uses **SingularityNET's MeTTa (Hyperon)** knowledge graph to perform symbolic reasoning on the market data. Instead of just filtering data, it can understand and deduce complex relationships between markets.
 
-You will need two separate terminal windows for this setup: one for the backend and one for the agent.
+## The Possibilities: Beyond Simple Queries
 
-### 1. Backend Setup
+This architecture opens the door to truly intelligent analysis. While you can ask simple questions, the real power lies in leveraging the reasoning engine.
 
-The backend is a FastAPI server that queries the database.
+### Example Queries
 
-1.  **Navigate to the Backend Directory:**
-    ```bash
-    cd backend
-    ```
+*   **Simple Data Retrieval:**
+    *   `get market stats`
+    *   `show me the top 5 crypto markets by volume`
+    *   `find active politics markets with liquidity under 10k`
+*   **Symbolic Reasoning with MeTTa:**
+    *   `recommendations for will-donald-trump-win-the-2024-election`
 
-2.  **Create a Virtual Environment:**
-    ```bash
-    python3 -m venv venv
-    ```
+The "recommendations" query doesn't just filter a database; it builds a knowledge graph of markets and their relationships (category, tags) and uses logical rules to *deduce* which markets are relevant.
 
-3.  **Activate the Virtual Environment:**
-    ```bash
-    source venv/bin/activate
-    ```
-    *(Your terminal prompt should now show `(venv)`)*
+### Future Expansion
 
-4.  **Install Dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+This modular design makes it easy to add new capabilities:
+*   **Add New Tools:** Create a new function in `tools.py` to call a different API (e.g., a sentiment analysis API for news articles).
+*   **Add New Reasoning Rules:** Expand `reasoning.py` with more complex MeTTa rules. For example, you could define a rule for "contrarian markets" (markets with high volume but lopsided odds) or "trending markets" (markets with a recent spike in volume). The possibilities are endless.
 
-5.  **Configure Environment:**
-    Create a file named `.env` inside the `backend` directory. Its content should be one line:
-    ```
-    MONGODB_URL="your_mongodb_connection_string_here"
-    ```
-    Replace the placeholder with your actual MongoDB connection string.
+## Setup and Running
 
-### 2. Agent Setup
-
-The agent is the conversational AI that you will interact with.
-
-1.  **Navigate to the Project Root:**
-    ```bash
-    # If you are in the backend directory
-    cd .. 
-    ```
-
-2.  **Create a Virtual Environment:**
-    *(If you don't already have one for the agent)*
-    ```bash
-    python3 -m venv .venv
-    ```
-
-3.  **Activate the Virtual Environment:**
-    ```bash
-    source .venv/bin/activate
-    ```
-
-4.  **Install Dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-## Running the Application
-
-1.  **Start the Backend:**
-    In your first terminal (with the backend's `venv` activated), run the following command from the **project root directory**:
-    ```bash
-    uvicorn backend.app.main:app --reload --port 8000
-    ```
-    *(You can change the `--port` to any value, like 5000)*
-
-2.  **Start the Agent:**
-    In your second terminal (with the agent's `.venv` activated), run the following command from the **project root directory**:
-    ```bash
-    python main.py
-    ```
-
-3.  **Interact with the Agent:**
-    When the agent starts, it will print an "Agent inspector available at..." URL. Open this link in your browser. The inspector UI will detect the agent's chat protocol and provide you with a chat interface to send messages.
-
-## Example Agent Queries
-
-You can ask the agent questions like:
-
--   "get market stats"
--   "show me the top 5 crypto markets by volume"
--   "find active politics markets"
--   "show me markets with liquidity over 50k"
--   "find the top 3 markets sorted by liquidity"
+*(Instructions for setting up the backend and agent remain the same as before.)*
