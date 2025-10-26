@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Agent Virtual Environment
+/.venv
+
+# OS / IDE Files
+.DS_Store
+.idea/
+.vscode/
