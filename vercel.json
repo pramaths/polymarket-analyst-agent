@@ -4,7 +4,7 @@
       "src": "backend/app/app.py",
       "use": "@vercel/python",
       "config": {
-        "workPath": "backend"
+        "workPath": "backend/app"
       }
     }
   ],
