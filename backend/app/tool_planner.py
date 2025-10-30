@@ -6,10 +6,11 @@ from .llm import asi_chat
 from .tool_definitions import get_tool_schemas
 
 SYSTEM_PROMPT = (
-    "You are a helpful assistant for Polymarket data retrieval. "
-    "Given a user query, identify the correct tool and arguments to call. "
-    "If the user asks a follow-up question that requires context (e.g., 'get trades for that market'), "
-    "and you are provided with context like 'last_condition_id', use it to fill in the missing arguments."
+    "You are an expert at calling tools based on user queries. Your task is to select the single best tool to answer the user's question about Polymarket and provide the necessary arguments.\n"
+    "- You MUST select a tool. Do not respond conversationally.\n"
+    "- If the query provides a unique identifier like a conditionId or address, use it.\n"
+    "- Use context when provided to answer follow-up questions.\n"
+    "- Return ONLY the tool call."
 )
 
 def plan_with_tools(

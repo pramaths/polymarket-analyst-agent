@@ -54,13 +54,13 @@ GET_ORDERBOOK_TOOL = {
     "type": "function",
     "function": {
         "name": "get_order_book",
-        "description": "Get a summary of the order book for a specific market condition, including top bids and asks, tick size, and minimum order size.",
+        "description": "Get a summary of the order book for a specific market ID, including top bids and asks, tick size, and minimum order size.",
         "parameters": {
             "type": "object",
             "properties": {
-                "condition_id": {"type": "string", "description": "The unique identifier for the market condition."}
+                "market_id": {"type": "string", "description": "The unique identifier for the market (e.g., a number like '618023')."}
             },
-            "required": ["condition_id"],
+            "required": ["market_id"],
         },
     }
 }
@@ -93,6 +93,21 @@ GET_TOP_TRADERS_TOOL = {
     }
 }
 
+GET_CLOSED_POSITIONS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_closed_positions_for_user",
+        "description": "Get a list of closed positions for a specific trader, showing the market and realized PNL.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "address": {"type": "string", "description": "The public key (0x...) of the trader."}
+            },
+            "required": ["address"],
+        },
+    }
+}
+
 ALL_TOOLS = [
     GET_MARKETS_TOOL,
     GET_TRADES_TOOL,
@@ -100,6 +115,7 @@ ALL_TOOLS = [
     GET_ORDERBOOK_TOOL,
     GET_TOP_HOLDERS_TOOL,
     GET_TOP_TRADERS_TOOL,
+    GET_CLOSED_POSITIONS_TOOL,
 ]
 
 def get_tool_schemas() -> list[dict[str, Any]]:

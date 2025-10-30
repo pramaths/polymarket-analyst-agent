@@ -15,6 +15,7 @@ from .polymarket_client import (
     get_order_book,
     get_top_holders,
     get_top_traders_by_pnl,
+    get_closed_positions_for_user,
 )
 
 # Configure logging
@@ -28,15 +29,17 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 def _format_markets_text(markets: List[Dict[str, Any]]) -> str:
     if not markets:
         return "No markets found."
-    lines = ["Top Markets:"]
+    lines = ["**📊 Top Markets:**\n"]
     for i, market in enumerate(markets, 1):
         lines.append(
-            f"\n{i}. {market.get('question')}\n"
-            f"   ID: {market.get('conditionId')}\n"
-            f"   Category: {market.get('category')}\n"
-            f"   Volume: ${market.get('volume', 0):,.2f}\n"
-            f"   Liquidity: ${market.get('liquidity', 0):,.2f}\n"
-            f"   Ends: {market.get('endDate')}"
+            f"**{i}. {market.get('question')}**\n"
+            f"   - **Market ID:** `{market.get('id')}`\n"
+            f"   - **Condition ID:** `{market.get('conditionId')}`\n"
+            f"   - **Category:** {market.get('category')}\n"
+            f"   - **Volume:** ${market.get('volume', 0):,.2f} 💹\n"
+            f"   - **Liquidity:** ${market.get('liquidity', 0):,.2f} 💧\n"
+            f"   - **Prices:** Yes: ${market.get('yes_price', 0):.2f} | No: ${market.get('no_price', 0):.2f}\n"
+            f"   - **Ends:** {market.get('endDate')} ⏳\n"
         )
     return "\n".join(lines)
 
@@ -45,17 +48,18 @@ def _format_trades_text(trades: List[Dict[str, Any]]) -> str:
         return "No trades found for this market."
     
     title = trades[0].get('title', 'N/A')
-    lines = [f"Recent Trades for '{title}':"]
-    for i, trade in enumerate(trades[:10], 1): # show top 10
+    lines = [f"**📈 Recent Trades for '{title}':**\n"]
+    for i, trade in enumerate(trades[:10], 1):
         ts_val = trade.get('timestamp', 0)
         ts = datetime.fromtimestamp(ts_val) if ts_val else datetime.now()
+        side_emoji = "🟢" if trade.get('side') == 'buy' else "🔴"
         lines.append(
-            f"\n{i}. {ts.strftime('%Y-%m-%d %H:%M')}\n"
-            f"   Side: {trade.get('side')}\n"
-            f"   Outcome: {trade.get('outcome')}\n"
-            f"   Size: {trade.get('size', 0):.2f}\n"
-            f"   Price: ${trade.get('price', 0):.2f}\n"
-            f"   Trader: {trade.get('proxyWallet')}"
+            f"**{i}. {ts.strftime('%Y-%m-%d %H:%M')}**\n"
+            f"   - **Side:** {trade.get('side')} {side_emoji}\n"
+            f"   - **Outcome:** {trade.get('outcome')}\n"
+            f"   - **Size:** {trade.get('size', 0):.2f}\n"
+            f"   - **Price:** ${trade.get('price', 0):.2f}\n"
+            f"   - **Trader:** `{trade.get('proxyWallet')}`\n"
         )
     return "\n".join(lines)
 
@@ -65,25 +69,27 @@ def _format_trader_details_text(details: Dict[str, Any]) -> str:
     
     pnl = details.get('pnl', {})
     total_pnl = pnl.get('all_time', 0)
+    pnl_emoji = "🚀" if total_pnl > 0 else "📉"
     
     positions = details.get('positions', [])
     trades = details.get('trades', [])
     
     lines = [
-        f"Trader Details for {details.get('address')}",
-        f"All-time PNL: ${total_pnl:,.2f}",
-        f"Total Volume: ${details.get('total_volume', 0):,.2f}",
-        "\nRecent Positions:",
+        f"**👤 Trader Details for `{details.get('address')}`**\n",
+        f"   - **All-time PNL:** ${total_pnl:,.2f} {pnl_emoji}\n",
+        f"   - **Total Volume:** ${details.get('total_volume', 0):,.2f}\n",
+        "**📊 Recent Positions:**",
     ]
     if not positions:
-        lines.append("  None")
+        lines.append("  - None")
     else:
         for pos in positions[:5]:
-            lines.append(f"  - Market: '{pos.get('market_title', 'N/A')}', PNL: ${pos.get('pnl', 0):,.2f}")
+            pos_pnl_emoji = "🟢" if pos.get('pnl', 0) > 0 else "🔴"
+            lines.append(f"  - **Market:** '{pos.get('market_title', 'N/A')}', **PNL:** ${pos.get('pnl', 0):,.2f} {pos_pnl_emoji}")
 
-    lines.append("\nRecent Trades:")
+    lines.append("\n**📈 Recent Trades:**")
     if not trades:
-        lines.append("  None")
+        lines.append("  - None")
     else:
         for trade in trades[:5]:
             ts_val = trade.get('timestamp', 0)
@@ -96,24 +102,36 @@ def _format_trader_details_text(details: Dict[str, Any]) -> str:
 def _format_order_book_text(order_book: Dict[str, Any]) -> str:
     if not order_book:
         return "Order book data is not available."
+    if "error" in order_book:
+        return order_book.get("error")
 
-    lines = [f"Order Book Summary for Market: {order_book.get('market')}"]
-    lines.append(f"  Tick Size: {order_book.get('tick_size')}")
-    lines.append(f"  Min Order Size: {order_book.get('min_order_size')}")
+    lines = ["**📖 Order Book Summary:**\n"]
 
-    lines.append("\nBids (Price | Size):")
-    bids = sorted(order_book.get('bids', []), key=lambda x: float(x.get('price', 0)), reverse=True)
-    if not bids:
-        lines.append("  - No bids")
-    for order in bids[:5]:
-        lines.append(f"  - ${float(order.get('price', 0)):.2f} | {float(order.get('size', 0)):.2f}")
+    for outcome in ["yes", "no"]:
+        lines.append(f"**--- {outcome.upper()} Outcome ---**")
+        book = order_book.get(outcome, {})
+        
+        if "error" in book:
+            lines.append(f"  - {book['error']}")
+            continue
 
-    lines.append("\nAsks (Price | Size):")
-    asks = sorted(order_book.get('asks', []), key=lambda x: float(x.get('price', 0)))
-    if not asks:
-        lines.append("  - No asks")
-    for order in asks[:5]:
-        lines.append(f"  - ${float(order.get('price', 0)):.2f} | {float(order.get('size', 0)):.2f}")
+        lines.append(f"  - **Market:** `{book.get('market')}`")
+        lines.append(f"  - **Tick Size:** {book.get('tick_size')}")
+        lines.append(f"  - **Min Order Size:** {book.get('min_order_size')}")
+
+        lines.append("\n  **🟢 Bids (Price | Size):**")
+        bids = sorted(book.get('bids', []), key=lambda x: float(x.get('price', 0)), reverse=True)
+        if not bids:
+            lines.append("    - No bids")
+        for order in bids[:5]:
+            lines.append(f"    - `${float(order.get('price', 0)):.2f}` | `{float(order.get('size', 0)):.2f}`")
+
+        lines.append("\n  **🔴 Asks (Price | Size):**")
+        asks = sorted(book.get('asks', []), key=lambda x: float(x.get('price', 0)))
+        if not asks:
+            lines.append("    - No asks")
+        for order in asks[:5]:
+            lines.append(f"    - `${float(order.get('price', 0)):.2f}` | `{float(order.get('size', 0)):.2f}`")
         
     return "\n".join(lines)
 
@@ -122,15 +140,15 @@ def _format_top_holders_text(top_holders: Dict[str, Any]) -> str:
     if not top_holders or not (top_holders.get('yes') or top_holders.get('no')):
         return "No holder information available."
 
-    lines = ["Top Holders:"]
+    lines = ["**🏆 Top Holders:**\n"]
     
-    lines.append("\nTop 5 'Yes' Holders (Username | Address | Amount):")
+    lines.append("**👍 Top 5 'Yes' Holders:**")
     for holder in top_holders.get('yes', []):
-        lines.append(f"  - {holder.get('username', 'N/A')} | {holder.get('address', 'N/A')} | {holder.get('amount', 0):.2f}")
+        lines.append(f"  - **User:** {holder.get('username', 'N/A')} (`{holder.get('address', 'N/A')}`) | **Amount:** {holder.get('amount', 0):.2f}")
 
-    lines.append("\nTop 5 'No' Holders (Username | Address | Amount):")
+    lines.append("\n**👎 Top 5 'No' Holders:**")
     for holder in top_holders.get('no', []):
-        lines.append(f"  - {holder.get('username', 'N/A')} | {holder.get('address', 'N/A')} | {holder.get('amount', 0):.2f}")
+        lines.append(f"  - **User:** {holder.get('username', 'N/A')} (`{holder.get('address', 'N/A')}`) | **Amount:** {holder.get('amount', 0):.2f}")
         
     return "\n".join(lines)
 
@@ -139,13 +157,30 @@ def _format_top_traders_text(traders: List[Dict[str, Any]]) -> str:
     if not traders:
         return "No top trader information available."
 
-    lines = ["Top 5 Traders by PNL:"]
+    lines = ["**🥇 Top 5 Traders by PNL:**\n"]
     for i, trader in enumerate(traders, 1):
         username = trader.get('username') or trader.get('address')
-        lines.append(f"\n{i}. Trader: {username}")
-        lines.append(f"   Total PNL: ${trader.get('total_pnl', 0):,.2f}")
-        lines.append(f"   Most Profitable Market: '{trader.get('most_profitable_market', 'N/A')}'")
+        pnl_emoji = "🚀" if trader.get('total_pnl', 0) > 0 else "📉"
+        lines.append(f"**{i}. Trader: {username}**")
+        lines.append(f"   - **Total PNL:** ${trader.get('total_pnl', 0):,.2f} {pnl_emoji}")
+        lines.append(f"   - **Most Profitable Market:** '{trader.get('most_profitable_market', 'N/A')}'")
         
+    return "\n".join(lines)
+
+
+def _format_closed_positions_text(positions: List[Dict[str, Any]]) -> str:
+    if not positions:
+        return "No closed positions found for this trader."
+
+    lines = ["**📜 Closed Positions & PNL:**\n"]
+    for pos in positions:
+        pnl = pos.get('realizedPnl', 0)
+        pnl_emoji = "🟢" if pnl > 0 else "🔴" if pnl < 0 else "⚪"
+        lines.append(
+            f"- **Market:** '{pos.get('title', 'N/A')}'\n"
+            f"  - **Condition ID:** `{pos.get('conditionId')}`\n"
+            f"  - **Realized PNL:** ${pnl:,.2f} {pnl_emoji}\n"
+        )
     return "\n".join(lines)
 
 
@@ -244,12 +279,20 @@ async def agent_ask(
         formatted_result = _format_trades_text(result)
 
     elif tool_name == "get_order_book":
-        condition_id = arguments.get("condition_id")
-        if not condition_id:
-            return {"error": "condition_id is required for get_order_book."}
-        result = await run_in_threadpool(get_order_book, condition_id)
-        if session_id:
-            update_session_context(session_id, {"last_condition_id": condition_id})
+        market_id = arguments.get("market_id")
+        if not market_id:
+            return {"error": "market_id is required for get_order_book."}
+        
+        result_data = await run_in_threadpool(get_order_book, market_id)
+
+        if "error" in result_data:
+            result = result_data
+        else:
+            result = result_data.get("order_books")
+            condition_id = result_data.get("condition_id")
+            if session_id and condition_id:
+                update_session_context(session_id, {"last_condition_id": condition_id})
+        
         formatted_result = _format_order_book_text(result)
 
     elif tool_name == "get_top_holders":
@@ -264,6 +307,15 @@ async def agent_ask(
     elif tool_name == "get_top_traders_by_pnl":
         result = await run_in_threadpool(get_top_traders_by_pnl)
         formatted_result = _format_top_traders_text(result)
+
+    elif tool_name == "get_closed_positions_for_user":
+        address = arguments.get("address")
+        if not address:
+            return {"error": "address is required for get_closed_positions_for_user."}
+        result = await run_in_threadpool(get_closed_positions_for_user, address)
+        if session_id:
+            update_session_context(session_id, {"last_trader_address": address})
+        formatted_result = _format_closed_positions_text(result)
 
     elif tool_name == "get_trader_details":
         address = arguments.get("address")
@@ -285,6 +337,13 @@ async def agent_ask(
         return {"error": f"Unknown tool: {tool_name}"}
 
     final_result = formatted_result if fmt == "text" else result
-    return {"plan": {"action": tool_name, "params": arguments}, "result": final_result}
+    response_payload = {"result": final_result}
+    
+    try:
+        logger.info(f"--- Sending Response to Agent ---\n{json.dumps(response_payload, indent=2)}")
+    except TypeError:
+        logger.info(f"--- Sending Response to Agent (unserializable) ---\n{str(response_payload)}")
+        
+    return response_payload
 
 

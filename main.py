@@ -20,9 +20,9 @@ chat_proto = Protocol(name=chat_protocol_spec.name, version=chat_protocol_spec.v
 
 @agent.on_event("startup")
 async def startup(ctx: Context):
-    ctx.logger.info(f"Agent {ctx.name} starting up.")
+    ctx.logger.info(f"Agent {agent.name} starting up.")
 
-@agent.on_interval(period=60.0)
+@agent.on_interval(period=600.0)
 async def health_check(ctx: Context):
     try:
         async with httpx.AsyncClient() as client:

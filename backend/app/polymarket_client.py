@@ -1,6 +1,8 @@
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode
 import requests
+import inspect
+import json
 
 
 GAMMA_BASE_URL = "https://gamma-api.polymarket.com"
@@ -13,6 +15,9 @@ class PolymarketAPIError(Exception):
 
 
 def _request_json(base_url: str, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    caller_function_name = inspect.stack()[1].function
+    print(f"--- Calling Polymarket API via function: {caller_function_name} ---")
+    
     url = f"{base_url.rstrip('/')}/{path.lstrip('/')}"
     response = requests.get(url, params=params or {}, timeout=30)
     if response.status_code != 200:
@@ -32,6 +37,11 @@ def get_markets(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     return _request_json(GAMMA_BASE_URL, "/markets", params)
 
 
+def get_market(market_id: str) -> Dict[str, Any]:
+    """Fetch a single market by its ID."""
+    return _request_json(GAMMA_BASE_URL, f"/markets/{market_id}")
+
+
 # Data API wrappers
 def get_positions(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     return _request_json(DATA_BASE_URL, "/positions", params)
@@ -49,9 +59,49 @@ def get_closed_positions(params: Optional[Dict[str, Any]] = None) -> Dict[str, A
     return _request_json(DATA_BASE_URL, "/closed-positions", params)
 
 
-def get_order_book(condition_id: str) -> Dict[str, Any]:
-    """Get the order book for a given market condition."""
-    return _request_json(CLOB_BASE_URL, f"/markets/{condition_id}/orders")
+def get_order_book(market_id: str) -> Dict[str, Any]:
+    """
+    Get the order book for a given market ID by first fetching the market's
+    clobTokenIds and then getting the order book for each token (Yes/No).
+    """
+    try:
+        # 1. Fetch the full market details using the simple ID
+        market = get_market(market_id)
+        print(f"--- Full Market Data ---\n{json.dumps(market, indent=2)}")
+
+        clob_token_ids_str = market.get("clobTokenIds")
+        condition_id = market.get("conditionId")
+
+        if not clob_token_ids_str:
+            return {"error": "Order book not available for this market (no CLOB token IDs)."}
+
+        # 2. Parse token IDs. They are often a stringified list.
+        try:
+            clob_token_ids = json.loads(clob_token_ids_str)
+        except (json.JSONDecodeError, TypeError):
+            return {"error": "Failed to parse order book token IDs."}
+
+        if not isinstance(clob_token_ids, list) or len(clob_token_ids) < 2:
+             return {"error": "Invalid order book token IDs found."}
+
+        # Assuming token 0 is NO and token 1 is YES
+        no_token_id, yes_token_id = clob_token_ids[0], clob_token_ids[1]
+
+        # 3. Fetch order books for both tokens
+        order_books = {}
+        try:
+            order_books["yes"] = _request_json(CLOB_BASE_URL, "/book", {"token_id": yes_token_id})
+        except PolymarketAPIError:
+            order_books["yes"] = {"error": "Order book for 'Yes' not available."}
+
+        try:
+            order_books["no"] = _request_json(CLOB_BASE_URL, "/book", {"token_id": no_token_id})
+        except PolymarketAPIError:
+            order_books["no"] = {"error": "Order book for 'No' not available."}
+        
+        return {"order_books": order_books, "condition_id": condition_id}
+    except Exception as e:
+        return {"error": f"An unexpected error occurred while fetching the order book: {str(e)}"}
 
 
 def get_top_holders(condition_id: str) -> Dict[str, List[Dict[str, Any]]]:
@@ -279,23 +329,56 @@ def get_events_normalized(params: Optional[Dict[str, Any]] = None) -> List[Dict[
 # -------------------- Markets normalization --------------------
 
 def _normalize_market(m: Dict[str, Any]) -> Dict[str, Any]:
+    outcome_prices_str = _safe_str(m.get("outcomePrices"))
+    prices = outcome_prices_str.split(',')
+    yes_price = 0.0
+    no_price = 0.0
+
+    outcomes_str = _safe_str(m.get("outcomes"))
+    outcomes = [o.strip().lower() for o in outcomes_str.split(',')]
+
+    if 'yes' in outcomes and 'no' in outcomes and len(prices) >= 2:
+        try:
+            yes_index = outcomes.index('yes')
+            no_index = outcomes.index('no')
+            yes_price = _safe_float(prices[yes_index])
+            no_price = _safe_float(prices[no_index])
+        except (ValueError, IndexError):
+            pass
+
     return {
         "id": _safe_str(m.get("id")),
-        "question": _safe_str(m.get("question") or m.get("title")),
         "conditionId": _safe_str(m.get("conditionId")),
+        "question": _safe_str(m.get("question") or m.get("title")),
         "slug": _safe_str(m.get("slug")),
         "category": _safe_str(m.get("category")),
+        "startDate": _safe_str(m.get("startDateIso")),
+        "endDate": _safe_str(m.get("endDateIso")),
         "liquidity": _safe_float(m.get("liquidityNum") or m.get("liquidity")),
         "volume": _safe_float(m.get("volumeNum") or m.get("volume")),
-        "startDate": _safe_str(m.get("startDate") or m.get("startDateIso")),
-        "endDate": _safe_str(m.get("endDate") or m.get("endDateIso")),
         "active": bool(m.get("active", False)),
         "closed": bool(m.get("closed", False)),
-        # keep 8-10 fields max; skip the rest
+        "marketType": _safe_str(m.get("marketType")),
+        "yes_price": yes_price,
+        "no_price": no_price,
+        "resolutionSource": _safe_str(m.get("resolutionSource")),
+        "image": _safe_str(m.get("image")),
     }
 
 
 def get_markets_normalized(params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    from datetime import datetime, timedelta
+
+    if params is None:
+        params = {}
+
+    if "closed" not in params:
+        params["closed"] = "false"
+    
+    if "start_date_min" not in params:
+        one_month_ago = datetime.now() - timedelta(days=30)
+        params["start_date_min"] = one_month_ago.strftime('%Y-%m-%dT%H:%M:%SZ')
+
     raw = get_markets(params)
     markets: List[Dict[str, Any]] = []
     if isinstance(raw, list):
@@ -347,6 +430,29 @@ def summarize_trader_details(address: str, positions_params: Optional[Dict[str, 
         "trades": trades,
         "closed_positions": closed_positions,
     }
+
+
+def get_closed_positions_for_user(user_address: str, limit: int = 25) -> List[Dict[str, Any]]:
+    """
+    Get closed positions for a specific user, returning a simplified list.
+    """
+    positions = get_closed_positions(params={
+        "user": user_address,
+        "limit": str(limit),
+    })
+
+    if not isinstance(positions, list):
+        return []
+    
+    simplified_positions = []
+    for pos in positions:
+        simplified_positions.append({
+            "title": pos.get("title"),
+            "conditionId": pos.get("conditionId"),
+            "realizedPnl": pos.get("realizedPnl", 0)
+        })
+    
+    return simplified_positions
 
 
 def infer_yes_no_from_price(yes_price: Optional[float]) -> Tuple[str, Dict[str, Any]]:

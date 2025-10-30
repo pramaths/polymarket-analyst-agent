@@ -1,5 +1,6 @@
 import requests
 import urllib.parse
+import json
 from typing import List, Dict, Any
 from config import BACKEND_URL
 
@@ -10,9 +11,12 @@ def _make_request(endpoint: str, api_key: str, params: Dict = None, method: str 
     }
     
     url = f"{BACKEND_URL}{endpoint}"
-    # Always encode params into the URL, regardless of method
     if params:
         url += f"?{urllib.parse.urlencode(params)}"
+    
+    print(f"--- Calling Backend API ---\nMethod: {method}\nURL: {url}")
+    if data:
+        print(f"Body: {json.dumps(data, indent=2)}")
         
     try:
         if method == "GET":
