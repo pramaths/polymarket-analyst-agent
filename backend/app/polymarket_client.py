@@ -5,6 +5,7 @@ import requests
 
 GAMMA_BASE_URL = "https://gamma-api.polymarket.com"
 DATA_BASE_URL = "https://data-api.polymarket.com"
+CLOB_BASE_URL = "https://clob.polymarket.com"
 
 
 class PolymarketAPIError(Exception):
@@ -46,6 +47,101 @@ def get_holders(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 
 def get_closed_positions(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     return _request_json(DATA_BASE_URL, "/closed-positions", params)
+
+
+def get_order_book(condition_id: str) -> Dict[str, Any]:
+    """Get the order book for a given market condition."""
+    return _request_json(CLOB_BASE_URL, f"/markets/{condition_id}/orders")
+
+
+def get_top_holders(condition_id: str) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Get top 5 holders for YES and NO outcomes for a given market,
+    sorted by amount.
+    """
+    raw_data = get_holders(params={"market": condition_id})
+
+    if not isinstance(raw_data, list):
+        return {"yes": [], "no": []}
+
+    yes_holders = []
+    no_holders = []
+
+    for token_data in raw_data:
+        holders = token_data.get("holders", [])
+        if not isinstance(holders, list):
+            continue
+        
+        for holder in holders:
+            outcome_index = holder.get("outcomeIndex")
+            
+            minimal_holder = {
+                "address": holder.get("proxyWallet"),
+                "username": holder.get("name") or holder.get("pseudonym"),
+                "amount": holder.get("amount", 0)
+            }
+
+            if outcome_index == 1:
+                yes_holders.append(minimal_holder)
+            elif outcome_index == 0:
+                no_holders.append(minimal_holder)
+
+    yes_holders.sort(key=lambda x: x.get("amount", 0), reverse=True)
+    no_holders.sort(key=lambda x: x.get("amount", 0), reverse=True)
+
+    return {
+        "yes": yes_holders[:5],
+        "no": no_holders[:5]
+    }
+
+
+def get_top_traders_by_pnl() -> List[Dict[str, Any]]:
+    """
+    Get top traders by PNL from the top 100 positions.
+    Returns a summary of their total PNL and most profitable market.
+    """
+    from collections import defaultdict
+
+    positions = get_positions(params={
+        "limit": "100",
+        "sortBy": "CASHPNL",
+        "sortDirection": "DESC"
+    })
+
+    if not isinstance(positions, list):
+        return []
+
+    trader_pnl = defaultdict(lambda: {'total_pnl': 0, 'most_profitable_market': None, 'max_pnl': -float('inf'), 'username': None})
+
+    for pos in positions:
+        address = pos.get("proxyWallet")
+        pnl = pos.get("cashPnl", 0)
+        market_title = pos.get("title")
+        username = pos.get("name") or pos.get("pseudonym")
+
+        if not address:
+            continue
+
+        trader_pnl[address]['total_pnl'] += pnl
+        if not trader_pnl[address]['username'] and username:
+            trader_pnl[address]['username'] = username
+        
+        if pnl > trader_pnl[address]['max_pnl']:
+            trader_pnl[address]['max_pnl'] = pnl
+            trader_pnl[address]['most_profitable_market'] = market_title
+
+    summary = []
+    for address, data in trader_pnl.items():
+        summary.append({
+            "address": address,
+            "username": data['username'],
+            "total_pnl": data['total_pnl'],
+            "most_profitable_market": data['most_profitable_market']
+        })
+
+    summary.sort(key=lambda x: x.get("total_pnl", 0), reverse=True)
+
+    return summary[:5]
 
 
 # Helper utilities for common queries

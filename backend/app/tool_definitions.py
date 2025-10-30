@@ -50,12 +50,56 @@ GET_TRADER_DETAILS_TOOL = {
 }
 
 # Future tool for orderbook
-# GET_ORDERBOOK_TOOL = { ... }
+GET_ORDERBOOK_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_order_book",
+        "description": "Get a summary of the order book for a specific market condition, including top bids and asks, tick size, and minimum order size.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "condition_id": {"type": "string", "description": "The unique identifier for the market condition."}
+            },
+            "required": ["condition_id"],
+        },
+    }
+}
+
+GET_TOP_HOLDERS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_top_holders",
+        "description": "Get the top 5 holders for a specific market condition, separated by YES and NO outcomes.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "condition_id": {"type": "string", "description": "The unique identifier for the market condition."}
+            },
+            "required": ["condition_id"],
+        },
+    }
+}
+
+GET_TOP_TRADERS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_top_traders_by_pnl",
+        "description": "Get the top 5 traders by profit and loss (PNL), summarizing their total PNL and most profitable market.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    }
+}
 
 ALL_TOOLS = [
     GET_MARKETS_TOOL,
     GET_TRADES_TOOL,
     GET_TRADER_DETAILS_TOOL,
+    GET_ORDERBOOK_TOOL,
+    GET_TOP_HOLDERS_TOOL,
+    GET_TOP_TRADERS_TOOL,
 ]
 
 def get_tool_schemas() -> list[dict[str, Any]]:

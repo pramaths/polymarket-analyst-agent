@@ -11,10 +11,6 @@ from uagents_core.contrib.protocols.chat import (
     ChatAcknowledgement, ChatMessage, EndSessionContent,
     StartSessionContent, TextContent, chat_protocol_spec,
 )
-from datetime import datetime
-from uuid import uuid4
-import re
-from tools import query_markets, get_market_stats, analyze_market, analyze_election, get_recommendations
 from dispatcher import handle_request
 from config import ASI_API_KEY, AGENT_NAME, AGENT_SEED, BACKEND_URL
 

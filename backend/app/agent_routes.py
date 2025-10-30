@@ -12,6 +12,9 @@ from .polymarket_client import (
     get_markets_normalized,
     get_trades_by_condition,
     summarize_trader_details,
+    get_order_book,
+    get_top_holders,
+    get_top_traders_by_pnl,
 )
 
 # Configure logging
@@ -87,6 +90,62 @@ def _format_trader_details_text(details: Dict[str, Any]) -> str:
             ts = datetime.fromtimestamp(ts_val) if ts_val else datetime.now()
             lines.append(f"  - {ts.strftime('%Y-%m-%d %H:%M')}: {trade.get('side')} {trade.get('size')} of '{trade.get('outcome')}' @ ${trade.get('price')}")
             
+    return "\n".join(lines)
+
+
+def _format_order_book_text(order_book: Dict[str, Any]) -> str:
+    if not order_book:
+        return "Order book data is not available."
+
+    lines = [f"Order Book Summary for Market: {order_book.get('market')}"]
+    lines.append(f"  Tick Size: {order_book.get('tick_size')}")
+    lines.append(f"  Min Order Size: {order_book.get('min_order_size')}")
+
+    lines.append("\nBids (Price | Size):")
+    bids = sorted(order_book.get('bids', []), key=lambda x: float(x.get('price', 0)), reverse=True)
+    if not bids:
+        lines.append("  - No bids")
+    for order in bids[:5]:
+        lines.append(f"  - ${float(order.get('price', 0)):.2f} | {float(order.get('size', 0)):.2f}")
+
+    lines.append("\nAsks (Price | Size):")
+    asks = sorted(order_book.get('asks', []), key=lambda x: float(x.get('price', 0)))
+    if not asks:
+        lines.append("  - No asks")
+    for order in asks[:5]:
+        lines.append(f"  - ${float(order.get('price', 0)):.2f} | {float(order.get('size', 0)):.2f}")
+        
+    return "\n".join(lines)
+
+
+def _format_top_holders_text(top_holders: Dict[str, Any]) -> str:
+    if not top_holders or not (top_holders.get('yes') or top_holders.get('no')):
+        return "No holder information available."
+
+    lines = ["Top Holders:"]
+    
+    lines.append("\nTop 5 'Yes' Holders (Username | Address | Amount):")
+    for holder in top_holders.get('yes', []):
+        lines.append(f"  - {holder.get('username', 'N/A')} | {holder.get('address', 'N/A')} | {holder.get('amount', 0):.2f}")
+
+    lines.append("\nTop 5 'No' Holders (Username | Address | Amount):")
+    for holder in top_holders.get('no', []):
+        lines.append(f"  - {holder.get('username', 'N/A')} | {holder.get('address', 'N/A')} | {holder.get('amount', 0):.2f}")
+        
+    return "\n".join(lines)
+
+
+def _format_top_traders_text(traders: List[Dict[str, Any]]) -> str:
+    if not traders:
+        return "No top trader information available."
+
+    lines = ["Top 5 Traders by PNL:"]
+    for i, trader in enumerate(traders, 1):
+        username = trader.get('username') or trader.get('address')
+        lines.append(f"\n{i}. Trader: {username}")
+        lines.append(f"   Total PNL: ${trader.get('total_pnl', 0):,.2f}")
+        lines.append(f"   Most Profitable Market: '{trader.get('most_profitable_market', 'N/A')}'")
+        
     return "\n".join(lines)
 
 
@@ -183,6 +242,28 @@ async def agent_ask(
         if session_id:
             update_session_context(session_id, {"last_condition_id": condition_id})
         formatted_result = _format_trades_text(result)
+
+    elif tool_name == "get_order_book":
+        condition_id = arguments.get("condition_id")
+        if not condition_id:
+            return {"error": "condition_id is required for get_order_book."}
+        result = await run_in_threadpool(get_order_book, condition_id)
+        if session_id:
+            update_session_context(session_id, {"last_condition_id": condition_id})
+        formatted_result = _format_order_book_text(result)
+
+    elif tool_name == "get_top_holders":
+        condition_id = arguments.get("condition_id")
+        if not condition_id:
+            return {"error": "condition_id is required for get_top_holders."}
+        result = await run_in_threadpool(get_top_holders, condition_id)
+        if session_id:
+            update_session_context(session_id, {"last_condition_id": condition_id})
+        formatted_result = _format_top_holders_text(result)
+
+    elif tool_name == "get_top_traders_by_pnl":
+        result = await run_in_threadpool(get_top_traders_by_pnl)
+        formatted_result = _format_top_traders_text(result)
 
     elif tool_name == "get_trader_details":
         address = arguments.get("address")
