@@ -1,0 +1,62 @@
+from typing import Any, Dict
+
+# Schemas for ASI:One tool-calling
+
+GET_MARKETS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_markets",
+        "description": "Get a list of top markets with essential data. Use for general queries about markets.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "number", "default": 5, "description": "Number of markets to return."}
+            },
+            "required": [],
+        },
+    }
+}
+
+GET_TRADES_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_trades_for_condition",
+        "description": "Get trades for a specific market condition. Requires a conditionId.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "condition_id": {"type": "string", "description": "The unique identifier for the market condition."},
+                "limit": {"type": "number", "default": 100, "description": "Number of trades to return."}
+            },
+            "required": ["condition_id"],
+        },
+    }
+}
+
+
+GET_TRADER_DETAILS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_trader_details",
+        "description": "Get a summary of a trader's activity, including positions and trade history.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "address": {"type": "string", "description": "The public key (0x...) of the trader."}
+            },
+            "required": ["address"],
+        },
+    }
+}
+
+# Future tool for orderbook
+# GET_ORDERBOOK_TOOL = { ... }
+
+ALL_TOOLS = [
+    GET_MARKETS_TOOL,
+    GET_TRADES_TOOL,
+    GET_TRADER_DETAILS_TOOL,
+]
+
+def get_tool_schemas() -> list[dict[str, Any]]:
+    return ALL_TOOLS

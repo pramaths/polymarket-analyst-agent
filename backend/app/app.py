@@ -3,8 +3,17 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from typing import List, Any
 from .database import get_database
 from .schemas import Market
+from .market_intelligence import generate_market_analysis
+from .realtime_research import generate_election_analysis
+from .reasoning import recommend_markets
+from .polymarket_routes import router as polymarket_router
+from .agent_routes import router as agent_router
 
 app = FastAPI()
+
+@app.get("/health", response_model=dict)
+async def health_check():
+    return {"status": "ok"}
 
 @app.get("/stats/market", response_model=dict)
 async def get_market_stats(db: AsyncIOMotorDatabase = Depends(get_database)):
@@ -13,7 +22,7 @@ async def get_market_stats(db: AsyncIOMotorDatabase = Depends(get_database)):
         if stats:
             stats["_id"] = str(stats["_id"])
             return stats
-        return {}  # Fallback
+        return {} 
     except Exception:
         return {}
 
@@ -76,3 +85,72 @@ async def read_markets(request: Request, db: AsyncIOMotorDatabase = Depends(get_
         return markets
     except Exception:
         return []  # Fallback
+
+@app.post("/analyze/market")
+async def analyze_market(request: Request, db: AsyncIOMotorDatabase = Depends(get_database)):
+    """Analyze a specific market with AI insights"""
+    try:
+        data = await request.json()
+        market_slug = data.get('slug')
+        
+        if not market_slug:
+            return {"error": "Market slug is required"}
+        
+        # Get the specific market
+        market = await db["markets"].find_one({"slug": market_slug})
+        if not market:
+            return {"error": "Market not found"}
+        
+        # Get all markets for context
+        all_markets_cursor = db["markets"].find({})
+        all_markets = await all_markets_cursor.to_list(length=1000)
+        
+        # Generate analysis
+        analysis = generate_market_analysis(market, all_markets)
+        
+        return {"analysis": analysis}
+    except Exception as e:
+        return {"error": str(e)}
+
+# Mount Polymarket API routes
+app.include_router(polymarket_router)
+app.include_router(agent_router)
+
+@app.post("/analyze/election")
+async def analyze_election(request: Request, db: AsyncIOMotorDatabase = Depends(get_database)):
+    """Analyze an election market with real-time research"""
+    try:
+        data = await request.json()
+        market_slug = data.get('slug')
+        market_question = data.get('question')
+        
+        if not market_slug or not market_question:
+            return {"error": "Market slug and question are required"}
+        
+        # Generate election analysis
+        analysis = generate_election_analysis(market_question, market_slug)
+        
+        return {"analysis": analysis}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/recommendations")
+async def get_recommendations(request: Request, db: AsyncIOMotorDatabase = Depends(get_database)):
+    """Get market recommendations using MeTTa reasoning"""
+    try:
+        data = await request.json()
+        target_slug = data.get('slug')
+        
+        if not target_slug:
+            return {"error": "Target market slug is required"}
+        
+        # Get all markets for context
+        all_markets_cursor = db["markets"].find({})
+        all_markets = await all_markets_cursor.to_list(length=1000)
+        
+        # Get recommendations using MeTTa
+        recommendations = recommend_markets(all_markets, target_slug)
+        
+        return {"recommendations": recommendations}
+    except Exception as e:
+        return {"error": str(e)}

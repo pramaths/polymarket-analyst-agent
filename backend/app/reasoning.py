@@ -1,7 +1,8 @@
 from hyperon import MeTTa
 from typing import List, Dict, Any
 
-def recommend_markets(all_markets: List[Dict, Any], target_slug: str) -> List[str]:
+def recommend_markets(all_markets: List[Dict[str, Any]], target_slug: str) -> List[str]:
+    """Use MeTTa symbolic reasoning to find related markets"""
     metta = MeTTa()
     knowledge = []
 
@@ -35,8 +36,8 @@ def recommend_markets(all_markets: List[Dict, Any], target_slug: str) -> List[st
         ; c) They share at least one tag (shares-tag $m1 $m2)
         (= (is-recommendation $m1 $m2)
            (if (and (!= $m1 $m2)
-                      (== (category-of $m1) (category-of $m2))
-                      (shares-tag $m1 $m2))
+                     (== (category-of $m1) (category-of $m2))
+                     (shares-tag $m1 $m2))
                $m2
                ())
         )

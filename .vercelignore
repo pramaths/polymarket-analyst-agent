@@ -1,0 +1,17 @@
+# Ignore agent files
+client.py
+config.py
+dispatcher.py
+main.py
+parser.py
+README.md
+requirements.txt
+tools.py
+
+# Ignore virtual environments
+venv/
+backend/venv/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
