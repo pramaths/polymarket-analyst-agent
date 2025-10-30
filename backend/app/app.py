@@ -11,6 +11,10 @@ from .agent_routes import router as agent_router
 
 app = FastAPI()
 
+@app.get("/", response_model=dict)
+async def read_root():
+    return {"message": "Welcome to the Polymarket Analyst Agent Backend"}
+
 @app.get("/health", response_model=dict)
 async def health_check():
     return {"status": "ok"}
